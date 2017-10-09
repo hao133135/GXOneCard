@@ -63,8 +63,12 @@ public class myadapter<T> extends BaseAdapter  {
             inflator = (LayoutInflater) context.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
             convertView = inflator.inflate(resource, null);
             viewHolder = new ViewHolder();
-            viewHolder.nameTextView = (TextView)convertView.findViewById(R.id.txt_xs);   //为了减少开销，则只在第一页时调用findViewById
-            viewHolder.aearTextView =(TextView) convertView.findViewById(R.id.txt_msg);
+            //编号
+            viewHolder.numberTextView = convertView.findViewById(R.id.txt_bh);
+            //车号
+            viewHolder.nameTextView = convertView.findViewById(R.id.txt_xs);//为了减少开销，则只在第一页时调用findViewById
+            //验收状态
+            viewHolder.aearTextView = convertView.findViewById(R.id.txt_msg);
             convertView.setTag(viewHolder);
         }else{
             if (position == selectedItem) {
@@ -76,8 +80,9 @@ public class myadapter<T> extends BaseAdapter  {
 
         }
         Coalbytruckbean cya = coalfieldzoneList.get(position);
+        viewHolder.numberTextView.setText(Integer.toString(cya.getNumber()));
         viewHolder.nameTextView.setText(cya.getVehicleno());
-        viewHolder.aearTextView.setText(cya.getCoalfieldid());
+        viewHolder.aearTextView.setText(cya.getState());
         return convertView;
     }
     public void setSelectedItem(int selectedItem)
@@ -88,6 +93,7 @@ public class myadapter<T> extends BaseAdapter  {
 
 
     class ViewHolder{
+        private TextView numberTextView;
         private TextView nameTextView;
         private TextView aearTextView;
     }

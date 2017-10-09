@@ -93,6 +93,7 @@
                 android:gravity="center_vertical"
                 android:hint="请输入密码"
                 android:maxLength="20"
+                android:inputType="numberPassword"
                 android:singleLine="true"
                 android:textColor="@color/black"
                 android:textColorHint="@color/ac_login_edt_hint_color"
@@ -111,5 +112,16 @@
             android:text="登录"
             android:textColor="@color/ac_login_btn_text_color"
             android:textSize="18sp" />
+        <Button
+            android:id="@+id/btn_getVersion"
+            android:layout_width="match_parent"
+            android:layout_height="45dp"
+            android:layout_marginLeft="35dp"
+            android:layout_marginRight="35dp"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/shape_ac_login_btn_back_fill"
+            android:text="检查更新"
+            android:textColor="@color/ac_login_btn_text_color"
+            android:textSize="18sp"/>
     </LinearLayout>
 </LinearLayout>

@@ -1,16 +1,23 @@
 package com.qindao.coalfield;
 
 import android.app.AlertDialog;
+import android.app.AlertDialog.Builder;
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.Message;
 import android.support.v7.app.AppCompatActivity;
+import android.util.Log;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
@@ -19,6 +26,9 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
+
+import com.qindao.model.UpdataInfo;
+import com.qindao.utils.DownLoadManager;
 
 import org.apache.http.HttpResponse;
 import org.apache.http.HttpStatus;
@@ -33,7 +43,11 @@ import org.apache.http.util.EntityUtils;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 /**
  * A login screen that offers login via email/password.
@@ -44,7 +58,16 @@ public class LoginActivity extends AppCompatActivity {
     private EditText password;
     private EditText path;
     private Button button,but1,but2;
-    private Handler handler;
+
+    private final String TAG = this.getClass().getName();
+    private final int UPDATA_NONEED = 0;
+    private final int UPDATA_CLIENT = 1;
+    private final int GET_UNDATAINFO_ERROR = 2;
+    private final int SDCARD_NOMOUNTED = 3;
+    private final int DOWN_ERROR = 4;
+    private Button getVersion;
+    private UpdataInfo info;
+    private String localVersion;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -57,15 +80,17 @@ public class LoginActivity extends AppCompatActivity {
         but1 = (Button) findViewById(R.id.login_but1);
         but2 = (Button) findViewById(R.id.login_but2);
         path = (EditText) findViewById(R.id.loginurl);
+        getVersion = (Button) findViewById(R.id.btn_getVersion);
         SharedPreferences sharedPreferences=getSharedPreferences("config",0);
         String name=sharedPreferences.getString("name","");
         String pwd=sharedPreferences.getString("password","");
-        String url1 = sharedPreferences.getString("url","http://10.67.60.93:6678");
+        String url1 = sharedPreferences.getString("url","http://192.168.0.200:8090");
         username.setText(name);
         password.setText(pwd);
         path.setText(url1);
         but1.setOnClickListener(new but1Listener());
         but2.setOnClickListener(new but2Listener());
+        getVersion.setOnClickListener(new versionListener());
         button.setOnClickListener(new buttonListener());
         /*button.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -109,11 +134,11 @@ public class LoginActivity extends AppCompatActivity {
                             StringEntity se = new StringEntity(param.toString());
                             se.setContentType("application/json;charset=utf-8");
                             httpPost.setEntity(se);
-                           /* // 设置连接超时、读取超时
+                            // 设置连接超时、读取超时
                             httpClient.getParams().setIntParameter(
                                     HttpConnectionParams.SO_TIMEOUT, 5000); // 超时设置
                             httpClient.getParams().setIntParameter(
-                                    HttpConnectionParams.CONNECTION_TIMEOUT, 5000);// 连接超时*/
+                                    HttpConnectionParams.CONNECTION_TIMEOUT, 5000);// 连接超时
                             HttpResponse httpResponse = httpClient.execute(httpPost);
                             String key = EntityUtils.toString(httpResponse.getEntity());
                             String stats = key;
@@ -339,5 +364,151 @@ public class LoginActivity extends AppCompatActivity {
             return EntityUtils.toString(httpResponse.getEntity());
         }
         return null;
+    }
+
+    private class versionListener implements View.OnClickListener {
+        @Override
+        public void onClick(View view) {
+            try {
+                localVersion = getVersionName();
+                CheckVersionTask cv = new CheckVersionTask();
+                new Thread(cv).start();
+            } catch (Exception e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+    }
+    private String getVersionName() throws Exception {
+        //getPackageName()是你当前类的包名，0代表是获取版本信息
+        PackageManager packageManager = getPackageManager();
+        PackageInfo packInfo = packageManager.getPackageInfo(getPackageName(),
+                0);
+        return packInfo.versionName;
+    }
+    public class CheckVersionTask implements Runnable {
+        InputStream is;
+        public void run() {
+            try {
+                String path = getResources().getString(R.string.url_server);
+                URL url = new URL(path);
+                HttpURLConnection conn = (HttpURLConnection) url
+                        .openConnection();
+                conn.setConnectTimeout(5000);
+                conn.setRequestMethod("GET");
+                int responseCode = conn.getResponseCode();
+                if (responseCode == 200) {
+                    // 从服务器获得一个输入流
+                    is = conn.getInputStream();
+                }
+                info = UpdataInfoParser.getUpdataInfo(is);
+                if (info.getVersion().equals(localVersion)) {
+                    Log.i(TAG, "版本号相同");
+                    Message msg = new Message();
+                    msg.what = UPDATA_NONEED;
+                    handler.sendMessage(msg);
+                    // LoginMain();
+                } else {
+                    Log.i(TAG, "版本号不相同 ");
+                    Message msg = new Message();
+                    msg.what = UPDATA_CLIENT;
+                    handler.sendMessage(msg);
+                }
+            } catch (Exception e) {
+                Message msg = new Message();
+                msg.what = GET_UNDATAINFO_ERROR;
+                handler.sendMessage(msg);
+                e.printStackTrace();
+            }
+        }
+    }
+    Handler handler = new Handler() {
+        @Override
+        public void handleMessage(Message msg) {
+            // TODO Auto-generated method stub
+            super.handleMessage(msg);
+            switch (msg.what) {
+                case UPDATA_NONEED:
+                    Toast.makeText(getApplicationContext(), "不需要更新",
+                            Toast.LENGTH_SHORT).show();
+                case UPDATA_CLIENT:
+                    //对话框通知用户升级程序
+                    showUpdataDialog();
+                    break;
+                case GET_UNDATAINFO_ERROR:
+                    //服务器超时
+                    Toast.makeText(getApplicationContext(), "获取服务器更新信息失败",Toast.LENGTH_LONG).show();
+                    break;
+                case DOWN_ERROR:
+                    //下载apk失败
+                    Toast.makeText(getApplicationContext(), "下载新版本失败",Toast.LENGTH_LONG).show();
+                    break;
+            }
+        }
+    };
+    /*
+     *
+     * 弹出对话框通知用户更新程序
+     *
+     * 弹出对话框的步骤：
+     *  1.创建alertDialog的builder.
+     *  2.要给builder设置属性, 对话框的内容,样式,按钮
+     *  3.通过builder 创建一个对话框
+     *  4.对话框show()出来
+     */
+    protected void showUpdataDialog() {
+        AlertDialog.Builder builer = new Builder(this);
+        builer.setTitle("版本升级");
+        builer.setMessage(info.getDescription());
+        //当点确定按钮时从服务器上下载 新的apk 然后安装   װ
+        builer.setPositiveButton("确定", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int which) {
+                Log.i(TAG, "下载apk,更新");
+                downLoadApk();
+            }
+        });
+        builer.setNegativeButton("取消", new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int which) {
+                // TODO Auto-generated method stub
+                //do sth
+            }
+        });
+        AlertDialog dialog = builer.create();
+        dialog.show();
+    }
+    /*
+     * 从服务器中下载APK
+     */
+    protected void downLoadApk() {
+        final ProgressDialog pd;    //进度条对话框
+        pd = new  ProgressDialog(this);
+        pd.setProgressStyle(ProgressDialog.STYLE_HORIZONTAL);
+        pd.setMessage("正在下载更新");
+        pd.show();
+        new Thread(){
+            @Override
+            public void run() {
+                try {
+                    File file = DownLoadManager.getFileFromServer(info.getUrl(), pd);
+                    sleep(3000);
+                    installApk(file);
+                    pd.dismiss(); //结束掉进度条对话框
+                } catch (Exception e) {
+                    Message msg = new Message();
+                    msg.what = DOWN_ERROR;
+                    handler.sendMessage(msg);
+                    e.printStackTrace();
+                }
+            }}.start();
+    }
+
+    //安装apk
+    protected void installApk(File file) {
+        Intent intent = new Intent();
+        //执行动作
+        intent.setAction(Intent.ACTION_VIEW);
+        //执行的数据类型
+        intent.setDataAndType(Uri.fromFile(file), "application/vnd.android.package-archive");
+        startActivity(intent);
     }
 }
